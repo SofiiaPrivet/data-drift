@@ -1,10 +1,14 @@
-export const API_URL = `https://api.waqi.info/feed/berlin/?token=${import.meta.env.VITE_API_KEY}`
+// Berlin coordinates
+const LAT = 52.52
+const LON = 13.405
+export const API_URL = `https://api.openweathermap.org/data/2.5/air_pollution?lat=${LAT}&lon=${LON}&appid=${import.meta.env.VITE_API_KEY}`
 
+// Normalization ceilings (μg/m³) — maps "very poor" air quality to 1.0
 export const NORMALIZATION = {
-  pm25: 100,
-  pm10: 100,
-  no2:  100,
-  co:   10
+  pm25: 75,
+  pm10: 200,
+  no2:  200,
+  co:   10000
 }
 
 export const ADAPTATION = {

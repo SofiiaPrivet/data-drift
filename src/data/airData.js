@@ -7,19 +7,20 @@ async function fetchAirData() {
     const response = await fetch(API_URL)
     const data = await response.json()
 
-    if (data.status === 'ok') {
-      const iaqi = data.data.iaqi
-      state.pm25 = iaqi.pm25 ? Math.min(iaqi.pm25.v / NORMALIZATION.pm25, 1) : state.pm25
-      state.pm10 = iaqi.pm10 ? Math.min(iaqi.pm10.v / NORMALIZATION.pm10, 1) : state.pm10
-      state.no2  = iaqi.no2  ? Math.min(iaqi.no2.v  / NORMALIZATION.no2,  1) : state.no2
-      state.co   = iaqi.co   ? Math.min(iaqi.co.v   / NORMALIZATION.co,   1) : state.co
+    if (data.list && data.list[0]) {
+      const c = data.list[0].components
+      state.pm25 = Math.min(c.pm2_5 / NORMALIZATION.pm25, 1)
+      state.pm10 = Math.min(c.pm10  / NORMALIZATION.pm10, 1)
+      state.no2  = Math.min(c.no2   / NORMALIZATION.no2,  1)
+      state.co   = Math.min(c.co    / NORMALIZATION.co,   1)
 
-      console.log('Pollution ---',
-        'PM2.5:', state.pm25.toFixed(2),
-        'PM10:',  state.pm10.toFixed(2),
-        'NO2:',   state.no2.toFixed(2),
-        'CO:',    state.co.toFixed(2)
-      )
+      const timestamp = new Date().toLocaleTimeString()
+      console.group(`Air Quality — ${timestamp}`)
+      console.log('PM2.5 :', state.pm25.toFixed(3))
+      console.log('PM10  :', state.pm10.toFixed(3))
+      console.log('NO2   :', state.no2.toFixed(3))
+      console.log('CO    :', state.co.toFixed(3))
+      console.groupEnd()
     }
   } catch (e) {
     console.log('Data fetch error:', e)
