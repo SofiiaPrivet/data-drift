@@ -30,6 +30,7 @@ const material = new THREE.PointsMaterial({
 })
 
 const particles = new THREE.Points(geometry, material)
+particles.visible = false
 scene.add(particles)
 
 // cluster centers — copied so we can drift them without mutating config

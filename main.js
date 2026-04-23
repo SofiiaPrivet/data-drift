@@ -42,8 +42,8 @@ function animate() {
 
   const breath =
     1 +
-    Math.sin(time * (0.25 + tension * 0.5)) *
-    (0.015 + tension * 0.04) *
+    Math.sin(time * (3.0 + tension * 0.3)) *
+    (0.04 + tension * 0.06) *
     sensitivity *
     breathingSuppression *
     (0.6 + stage1 * 0.4)

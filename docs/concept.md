@@ -91,8 +91,34 @@ Focused viewing: approximately 2–3 minutes.
 Installation mode: continuous operation.
 Within several minutes, viewers may begin to perceive subtle dampening of responsiveness.
 
-11. VISUAL LANGUAGE --- will be apdated
+11. VISUAL LANGUAGE 
+## Intended Experience
+Awe, sublimity, chrysalis.
 
+## The Spectrum
+**Low pollution**: dreamy aesthetics with sense of relief and calm engagement.
+
+**High pollution**: a feeling of heaviness and suffocation.
+
+**The transition between them:**
+In a broken rhythm, gradual, out of sync
+
+## Visual References
+Spatial aesthetic: Blade Runner 2049, Dune(2021), Stalker, Perfect Days, Taste of Cherry.
+
+Links: Island (reivers, ice caves,glaciers),  landscape aerial photography, Hubble Images,penicilina, wrinkles skin, layers, membrane,storm stages,waves blend, uneven rhythm, human skin, subsurface, natural patterns. 
+
+## What You're Deliberately Avoiding
+a sci-fi energy core
+generic WebGL organic animation
+CGI look
+Plastic and fabric feeling
+
+## Color and Light Rationale
+Milk tones can be difficult to identify, blue shadows with subsurface feel on a low pollution stages. On high pollution tension of the light and dark blue. Transitions between states should be imperceptible and very gradual. 
+
+## The Shader's Role
+The main membrane (shader), where most changes in parameters occur, should be located at the boundary between the biological membrane and the skin, as well as natural phenomena such as storms, river currents, and dunes.
 
 12. FAILURE CONDITIONS
 The project fails if it becomes:

@@ -3,7 +3,7 @@ import scene from './scene.js'
 import vertSrc from './shaders/organism.vert.glsl?raw'
 import fragSrc from './shaders/organism.frag.glsl?raw'
 
-const geometry = new THREE.SphereGeometry(1, 768, 768)
+const geometry = new THREE.SphereGeometry(1, 512, 512) // dev resolution — restore to 768 before final build
 
 const uniforms = {
   time:        { value: 0 },

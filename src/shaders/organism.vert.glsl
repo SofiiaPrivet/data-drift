@@ -58,7 +58,7 @@ float getMacroDisplacement(vec3 p) {
   vec3 n = normalize(p);
 
   // ── WRINKLE DENSITY ───────────────────────────────────────────────────
-  float density = 0.6;
+  float density = 0.42;
 
   // ── FLOW DIRECTION (singularity-safe) ────────────────────────────────
   float fa = time * 0.05;
@@ -88,14 +88,26 @@ float getMacroDisplacement(vec3 p) {
   float across = dot(n, ftan);
   float depth  = dot(n, cross(flow, ftan));
 
+  // blend toward isotropic near poles to dissolve the convergence artefact
+  float poleFade = smoothstep(0.38, 0.85, abs(n.y));
   vec3 aniso =
-    flow             * along  * 2.2 +
-    ftan             * across * 0.4 +
-    cross(flow,ftan) * depth  * 0.85;
+    flow             * along  * mix(3.5, 1.0, poleFade) +
+    ftan             * across * mix(0.24, 1.0, poleFade) +
+    cross(flow,ftan) * depth  * mix(0.85, 1.0, poleFade);
 
-  // slow drift — the streaming movement
-  float drift  = time * (0.1 + pm25 * 0.1);
+  // bounded oscillating drift — two non-harmonic frequencies prevent float aliasing
+  float drift = sin(time * 0.018) * 5.5 + sin(time * 0.011) * 2.8;
   vec3 domain = aniso * 2.0 + flow * drift + 2.0;
+
+  // break pole radial symmetry — inject uncorrelated noise near poles
+  float poleProximity = smoothstep(0.42, 0.90, abs(n.y));
+  vec3 domainJitter = vec3(
+    noise(n * 2.8 + vec3(1.1, 0.0, 0.0) + time * 0.008),
+    noise(n * 2.8 + vec3(0.0, 2.2, 0.0) + time * 0.006),
+    noise(n * 2.8 + vec3(0.0, 0.0, 3.3) + time * 0.007)
+  );
+  domainJitter = domainJitter * 2.0 - 1.0;
+  domain += domainJitter * poleProximity * 2.2;
 
   float t = time * 0.035;
 
@@ -109,8 +121,7 @@ float getMacroDisplacement(vec3 p) {
   float nB    = noise(domain * 1.05 - t * 0.65);
   float macro = nA * 0.6 + nB * 0.4;
   macro = 1.0 - abs(macro);
-  macro = pow(macro, 2.2);
-  macro = smoothstep(0.22, 0.68, macro);
+  macro = pow(macro, 1.6);
 
   // ── MID LAYER (main folds — the gyri) ────────────────────────────────
   vec3 midDomain = domain + vec3(1.618, 2.718, 1.414);
@@ -118,10 +129,9 @@ float getMacroDisplacement(vec3 p) {
   float nD  = noise(midDomain * 3.4 * density - t * 0.52);
   float mid = nC * 0.55 + nD * 0.45;
   mid = 1.0 - abs(mid);
-  mid = pow(mid, 2.6);
-  mid = smoothstep(0.28, 0.70, mid);
+  mid = pow(mid, 2.4);
   mid *= macro * 0.8 + 0.2;
-  mid *= mix(0.45, 1.55, tension);
+  mid *= mix(0.20, 1.80, tension);
 
   // ── MICRO LAYER (fine sulcus lines) ──────────────────────────────────
   vec3 microDomain = domain + vec3(3.141, 1.732, 2.236);
@@ -129,16 +139,26 @@ float getMacroDisplacement(vec3 p) {
   float nF    = noise(microDomain * 8.9 * density - t * 0.75);
   float micro = nE * 0.52 + nF * 0.48;
   micro = 1.0 - abs(micro);
-  micro = pow(micro, 3.0);
+  micro = pow(micro, 2.2);
   micro *= mid * (macro * 0.55 + 0.45);
   micro *= mix(0.3, 1.4, tension);
 
-  // ── COMBINE ───────────────────────────────────────────────────────────
-  float dispMacro = macro * (0.28 + pm10 * 0.18);
-  float dispMid   = mid   * (0.22 + pm25 * 0.14);
-  float dispMicro = micro * 0.08;
+  // ── NANO LAYER (finest threading detail) ─────────────────────────────
+  vec3 nanoDomain = microDomain + vec3(2.537, 4.123, 1.987);
+  float nG   = noise(nanoDomain * 14.2 * density + t * 1.3);
+  float nH   = noise(nanoDomain * 21.0 * density - t * 0.95);
+  float nano = nG * 0.55 + nH * 0.45;
+  nano = 1.0 - abs(nano);
+  nano = pow(nano, 3.8);
+  nano *= micro * (mid * 0.4 + 0.6);
 
-  float combined = dispMacro + dispMid + dispMicro;
+  // ── COMBINE ───────────────────────────────────────────────────────────
+  float dispMacro = macro * (0.40 + pm10 * 0.15);
+  float dispMid   = mid   * (0.22 + pm25 * 0.14);
+  float dispMicro = micro * 0.20;
+  float dispNano  = nano  * 0.055;
+
+  float combined = dispMacro + dispMid + dispMicro + dispNano;
   combined = clamp(combined, 0.0, 0.85);
   combined = pow(combined, 1.12);
 
@@ -197,29 +217,14 @@ void main() {
   displacement *= 1.0 - rupture * 0.4;
   displacement = mix(displacement, smoothstep(0.0, 1.0, displacement), 0.25);
 
-  // ── BASIN MASK ───────────────────────────────────────────────────────
-  float poleY = normalize(pos).y;
-  float basinMask = smoothstep(-1.0, 0.6, poleY);
-
-  vec3 bn = normalize(pos) + 2.0;
-  float swell =
-    noise(bn * 1.1 + time * 0.04) * 0.6 +
-    noise(bn * 2.2 - time * 0.03) * 0.4;
-  swell = swell * 0.5 + 0.5;
-  swell = pow(swell, 1.8);
-  float basinDisp = swell * 0.035;
-
-  displacement = mix(basinDisp, displacement, basinMask);
-
   // ── ORGANIC BREATHING ────────────────────────────────────────────────
-  float t = time * 0.25;
+  float t = time * 3.0;
   float breathe = sin(t);
   breathe = sign(breathe) * pow(abs(breathe), 1.6);
   breathe = breathe * 0.5 + 0.5;
   breathe += sin(t * 0.7) * 0.05;
   breathe = clamp(breathe, 0.0, 1.0);
   float breatheAmp = mix(0.0, 0.07, breathe);
-  breatheAmp = mix(breatheAmp * 1.2, breatheAmp, basinMask);
 
   vThickness = displacement + breatheAmp * 0.5;
   vDetail    = displacement;
@@ -238,18 +243,6 @@ void main() {
   float d  = getMacroDisplacement(pos);
   float dx = getMacroDisplacement(pos + tT * eps);
   float dy = getMacroDisplacement(pos + tB * eps);
-
-  float pY2 = normalize(pos + tT * eps).y;
-  float pY3 = normalize(pos + tB * eps).y;
-  float bm2 = smoothstep(-1.0, 0.6, pY2);
-  float bm3 = smoothstep(-1.0, 0.6, pY3);
-
-  float sw2 = pow((noise((normalize(pos+tT*eps)+2.0)*1.1+time*0.04)*0.6+noise((normalize(pos+tT*eps)+2.0)*2.2-time*0.03)*0.4)*0.5+0.5, 1.8)*0.035;
-  float sw3 = pow((noise((normalize(pos+tB*eps)+2.0)*1.1+time*0.04)*0.6+noise((normalize(pos+tB*eps)+2.0)*2.2-time*0.03)*0.4)*0.5+0.5, 1.8)*0.035;
-
-  dx = mix(sw2, dx, bm2);
-  dy = mix(sw3, dy, bm3);
-  d  = mix(basinDisp, d, basinMask);
 
   vec3 p0 = pos + normal * d  * sensitivity;
   vec3 px = (pos + tT * eps) + normal * dx * sensitivity;

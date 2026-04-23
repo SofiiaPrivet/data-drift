@@ -74,16 +74,28 @@ void main() {
   float across = dot(vSurfacePos, ftan);
   float depth  = dot(vSurfacePos, cross(flow, ftan));
 
+  // blend toward isotropic near poles to dissolve the convergence artefact
+  float poleFade = smoothstep(0.38, 0.85, abs(vSurfacePos.y));
   vec3 aniso =
-    flow             * along  * 2.2 +
-    ftan             * across * 0.4 +
-    cross(flow,ftan) * depth  * 0.85;
+    flow             * along  * mix(2.2, 1.0, poleFade) +
+    ftan             * across * mix(0.4, 1.0, poleFade) +
+    cross(flow,ftan) * depth  * mix(0.85, 1.0, poleFade);
 
-  float drift  = time * (0.08 + pm25 * 0.08);
+  float drift = sin(time * 0.015) * 4.5 + sin(time * 0.009) * 2.2;
   vec3  domain = aniso * 2.0 + flow * drift + 2.0;
 
+  // break pole radial symmetry
+  float poleProximity = smoothstep(0.42, 0.90, abs(vSurfacePos.y));
+  vec3 domainJitter = vec3(
+    noise(vSurfacePos * 3.2 + vec3(1.1, 0.0, 0.0) + time * 0.008),
+    noise(vSurfacePos * 3.2 + vec3(0.0, 2.2, 0.0) + time * 0.006),
+    noise(vSurfacePos * 3.2 + vec3(0.0, 0.0, 3.3) + time * 0.007)
+  );
+  domainJitter = domainJitter * 2.0 - 1.0;
+  domain += domainJitter * poleProximity * 2.2;
+
   float feps = 0.007;
-  float density = 0.6;
+  float density = 0.42;
 
   vec3  fd1  = domain * 2.1 * density + vec3(1.618, 2.718, 1.414);
   float fnx1 = noise(fd1 + vec3(feps,0,0)) - noise(fd1 - vec3(feps,0,0));
@@ -95,12 +107,16 @@ void main() {
   float fny2 = noise(fd2 + vec3(0,feps,0)) - noise(fd2 - vec3(0,feps,0));
   float fnz2 = noise(fd2 + vec3(0,0,feps)) - noise(fd2 - vec3(0,0,feps));
 
+  vec3  fd3  = domain * 12.5 * density + vec3(1.234, 5.678, 3.210);
+  float fnx3 = noise(fd3 + vec3(feps,0,0)) - noise(fd3 - vec3(feps,0,0));
+  float fny3 = noise(fd3 + vec3(0,feps,0)) - noise(fd3 - vec3(0,feps,0));
+  float fnz3 = noise(fd3 + vec3(0,0,feps)) - noise(fd3 - vec3(0,0,feps));
+
   vec3 perturbation =
     vec3(fnx1, fny1, fnz1) * 0.85 +
-    vec3(fnx2, fny2, fnz2) * 0.50;
+    vec3(fnx2, fny2, fnz2) * 0.50 +
+    vec3(fnx3, fny3, fnz3) * 0.28;
 
-  float basinFade = smoothstep(-1.0, 0.6, vSurfacePos.y);
-  perturbation *= mix(0.06, 1.0, basinFade);
   perturbation *= 1.0 + vStress * 0.45;
 
   normal = normalize(normal + perturbation);
@@ -109,7 +125,7 @@ void main() {
   float facing    = clamp(dot(normal, view), 0.0, 1.0);
   float thickness = clamp(vThickness * 5.0, 0.0, 1.0);
   float pertMag   = clamp(length(perturbation) * 0.9, 0.0, 1.0);
-  float d         = mix(clamp(vDetail * 3.5, 0.0, 1.0), pertMag, 0.82);
+  float d         = mix(clamp(vDetail * 3.5, 0.0, 1.0), pertMag, 0.40);
 
   // ── ZONE MASKS ────────────────────────────────────────────────────────
   float peakZone   = smoothstep(0.48, 0.80, d);
@@ -120,13 +136,31 @@ void main() {
 
   float slopeZone  = clamp(1.0 - peakZone - valleyZone, 0.0, 1.0);
 
-  // ── COLOUR PALETTE (milky organic) ───────────────────────────────────
-  vec3 colPeak      = vec3(0.96, 0.96, 0.95);  // cool near-white milk
-  vec3 colSlope     = vec3(0.78, 0.80, 0.84);  // soft blue-grey slope
-  vec3 colValley    = vec3(0.28, 0.32, 0.42);  // muted blue-indigo valley
-  vec3 colSSS_peak  = vec3(0.94, 0.92, 0.96);  // cool lavender peak scatter
-  vec3 colSSS_deep  = vec3(0.35, 0.42, 0.62);  // deep blue valley glow
-  vec3 colRim       = vec3(0.98, 0.98, 1.00);  // pure cool white rim
+  // pollution state: 0 = clean Berlin air, 1 = heavy pollution
+  float pollutionLevel = clamp(pm25 * 0.5 + pm10 * 0.3 + no2 * 0.2, 0.0, 1.0);
+  float cleanness = 1.0 - pollutionLevel;
+
+  // ── SPATIAL COLOUR FIELDS — two slow-moving noise fields give geography
+  float cVar1 = noise(vSurfacePos * 1.8 + time * 0.004) * 0.5 + 0.5;
+  float cVar2 = noise(vSurfacePos * 0.7 - time * 0.003) * 0.5 + 0.5;
+  float cVar  = cVar1 * 0.6 + cVar2 * 0.4;
+
+  // ── COLOUR PALETTE — shifts from milky/open (clean) to dark/tense (polluted)
+  vec3 colPeak      = mix(vec3(0.94, 0.96, 1.00), vec3(0.72, 0.76, 0.84), pollutionLevel);
+
+  // slope: warm grey-sand ↔ cool slate-blue, spatially mixed
+  vec3 colSlopeWarm = mix(vec3(0.62, 0.58, 0.50), vec3(0.36, 0.32, 0.28), pollutionLevel);
+  vec3 colSlopeCool = mix(vec3(0.40, 0.46, 0.60), vec3(0.22, 0.26, 0.40), pollutionLevel);
+  vec3 colSlope     = mix(colSlopeCool, colSlopeWarm, cVar);
+
+  // valley: dark teal ↔ dark umber, spatially mixed
+  vec3 colValleyA   = vec3(0.05, 0.10, 0.14);  // dark teal
+  vec3 colValleyB   = vec3(0.10, 0.07, 0.06);  // dark warm umber
+  vec3 colValley    = mix(colValleyA, colValleyB, cVar2 * 0.7);
+
+  vec3 colSSS_peak  = mix(vec3(1.00, 0.95, 0.86), vec3(0.80, 0.88, 0.98), pollutionLevel);
+  vec3 colSSS_deep  = mix(vec3(0.45, 0.32, 0.22), vec3(0.30, 0.42, 0.48), cVar1);
+  vec3 colRim       = mix(vec3(1.00, 0.98, 0.94), vec3(0.82, 0.90, 1.00), pollutionLevel);
 
   vec3 color = colPeak   * peakZone
              + colSlope  * slopeZone
@@ -140,10 +174,12 @@ void main() {
   float NdL2 = clamp(dot(normal, lightDir2), 0.0, 1.0);
 
   float light1 = pow(NdL1, 1.1);
-  float light2 = pow(NdL2, 2.0) * 0.25;
+  float light2 = pow(NdL2, 1.5) * 0.30;
 
-  float lightZoneMask = peakZone * 1.0 + slopeZone * 0.55 + valleyZone * 0.08;
-  color *= 0.40 + (light1 * lightZoneMask + light2) * 1.15;
+  // clean air = open ambient (dreamy); polluted = low ambient (heavy/dark)
+  float ambientFloor = mix(0.35, 0.12, pollutionLevel);
+  float lightZoneMask = peakZone * 1.0 + slopeZone * 0.50 + valleyZone * 0.14;
+  color *= ambientFloor + (light1 * lightZoneMask + light2) * 1.20;
 
   // ── SPECULAR — sharp on peak crests ───────────────────────────────────
   vec3  halfV   = normalize(lightDir + view);
@@ -152,8 +188,14 @@ void main() {
   float specNarrow = pow(NdH, 48.0) * peakZone;
   float specBroad  = pow(NdH, 12.0) * (peakZone * 0.5 + slopeZone * 0.3);
 
-  color += colRim    * specNarrow * 0.80;
-  color += colPeak   * specBroad  * 0.22;
+  color += colRim    * specNarrow * 2.60;
+  color += colPeak   * specBroad  * 0.65;
+
+  // ── PEAK GLOW — warm milky luminosity, strongest at clean air ────────
+  float glowFacing = pow(facing, 0.7) * peakZone;
+  float glowHalo   = pow(NdH, 5.0) * peakZone;
+  float glowStr    = mix(0.32, 0.10, pollutionLevel);
+  color += colSSS_peak * (glowFacing * glowStr + glowHalo * mix(0.55, 0.20, pollutionLevel));
 
   // ── SUBSURFACE SCATTERING — PEAKS ─────────────────────────────────────
   float sss_peak =
@@ -161,10 +203,12 @@ void main() {
     (1.0 - thickness) * 0.7 +
     pow(1.0 - facing, 1.4) * 0.3;
 
-  sss_peak *= peakZone * 0.8 + slopeZone * 0.3;
+  sss_peak *= peakZone * 1.0 + slopeZone * 0.08;
   sss_peak  = clamp(sss_peak, 0.0, 1.0);
 
-  color = mix(color, colSSS_peak, sss_peak * 0.45);
+  // clean air: milky luminous peaks; polluted: SSS fades, form darkens
+  float sssMix = mix(0.78, 0.40, pollutionLevel);
+  color = mix(color, colSSS_peak, sss_peak * sssMix);
 
   // ── SUBSURFACE SCATTERING — VALLEYS ───────────────────────────────────
   float sss_valley =
@@ -175,11 +219,11 @@ void main() {
   sss_valley = pow(sss_valley, 1.3);
   sss_valley = clamp(sss_valley, 0.0, 1.0);
 
-  color += colSSS_deep * sss_valley * 0.35;
+  color += colSSS_deep * sss_valley * 0.50;
 
   // ── CAVITY DEPTH ─────────────────────────────────────────────────────
-  float valleyDepth = pow(valleyZone, 1.5);
-  color *= 1.0 - valleyDepth * 0.58;
+  float valleyDepth = pow(valleyZone, 1.4);
+  color *= 1.0 - valleyDepth * 0.60;
 
   // ── EDGE / RIM LIGHT ──────────────────────────────────────────────────
   float rim = pow(1.0 - facing, 2.5);
@@ -187,15 +231,23 @@ void main() {
   color += colRim      * rim * peakZone   * 0.38;
   color += colSSS_peak * pow(1.0 - facing, 3.5) * slopeZone * 0.22;
 
+  // ── IRIDESCENT SHEEN — thin-film shimmer at grazing angles ──────────
+  float iridAngle = pow(1.0 - facing, 3.0);
+  vec3 colIridA = vec3(0.38, 0.62, 0.55);  // teal-green
+  vec3 colIridB = vec3(0.52, 0.44, 0.68);  // soft lavender
+  vec3 colIrid  = mix(colIridA, colIridB, cVar1);
+  color += colIrid * iridAngle * (peakZone * 0.18 + slopeZone * 0.10);
+
+  // ── INNER LIGHT — cool atmospheric glow, always present ─────────────
+  vec3 colInnerLife = mix(vec3(0.75, 0.65, 0.50), vec3(0.55, 0.65, 0.82), cVar2);
+  float innerLife = pow(1.0 - facing, 2.2) * 0.13;
+  color += colInnerLife * innerLife;
+
   // ── MEMBRANE ZONES ────────────────────────────────────────────────────
   float inMembrane = (1.0 - smoothstep(0.04, 0.18, d)) * smoothstep(0.0, 0.04, d);
-  vec3  colMembrane = vec3(0.82, 0.84, 0.88);
+  vec3  colMembrane = vec3(0.72, 0.76, 0.85);
   color = mix(color, colMembrane, inMembrane * 0.35);
   color += colSSS_peak * inMembrane * (1.0 - thickness) * 0.14;
-
-  // ── BASIN ─────────────────────────────────────────────────────────────
-  float inBasin = 1.0 - smoothstep(0.005, 0.032, vDetail);
-  color = mix(color, vec3(0.88, 0.90, 0.94), inBasin * 0.40);
 
   // ── FLOW SHADOW ───────────────────────────────────────────────────────
   vec3  flowDirStatic = normalize(vec3(0.3, 0.6, 1.0));
@@ -204,21 +256,22 @@ void main() {
   color *= 1.0 - flowShadow * 0.18;
 
   // ── STRESS COLOUR ─────────────────────────────────────────────────────
-  vec3 colStress = vec3(0.72, 0.75, 0.90);
+  vec3 colStress = vec3(0.48, 0.58, 0.52);  // sage-green stress veins
   color = mix(color, colStress, vStress * peakZone * 0.20);
   color *= 1.0 - vStress * valleyZone * 0.15;
+
+  // ── SPATIAL DEPTH — receding surfaces fade, stronger when polluted ───
+  float recession = pow(1.0 - facing, 4.0);
+  color *= 1.0 - recession * mix(0.14, 0.38, pollutionLevel);
 
   // ── FINAL GRADE ───────────────────────────────────────────────────────
   float gray = dot(color, vec3(0.333));
   color = mix(vec3(gray), color, 1.22);
 
-  color = (color - 0.5) * 1.28 + 0.5;
+  color = (color - 0.5) * 1.18 + 0.5;
 
-  // gamma — cool lift, peaks stay luminous
-  color = pow(max(color, 0.0), vec3(0.90, 0.88, 0.84));
-
-  // cool milky tint overall — slightly blue cast
-  color *= vec3(0.97, 0.98, 1.02);
+  // gamma
+  color = pow(max(color, 0.0), vec3(0.88, 0.86, 0.84));
 
   color = clamp(color, 0.0, 1.0);
 
