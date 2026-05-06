@@ -1,4 +1,4 @@
-# Air Drift
+# Data Drift
 
 **An atmospheric organism driven by real-time urban air quality data.**
 
@@ -55,8 +55,8 @@ The environment consists of a responsive membrane, suspended particle fields, vo
 
 ```bash
 # Clone the repo
-git clone https://github.com/SofiiaPrivet/air-drift.git
-cd air-drift
+git clone https://github.com/SofiiaPrivet/data-drift.git
+cd data-drift
 
 # Install dependencies
 npm install

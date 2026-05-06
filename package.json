@@ -1,7 +1,7 @@
 {
-  "name": "1",
+  "name": "data-drift",
   "version": "1.0.0",
-  "description": "",
+  "description": "Data Drift — interactive 3D organism driven by real-time urban data",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
