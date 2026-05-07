@@ -10,7 +10,7 @@ Three.js · GLSL · WebGL · OpenWeatherMap API · Vite
 
 Humans continuously adapt to invisible environmental conditions. Over time, exposure does not produce visible collapse — only gradual desensitization.
 
-Air Drift places the viewer inside a responsive atmospheric organism. The organism does not resist pollution. It adapts. Responsiveness slowly decreases as exposure accumulates. When pollution decreases, recovery occurs — but gradually. The system never fully loses sensitivity.
+Data Drift places the viewer inside a responsive atmospheric organism. The organism does not resist pollution. It adapts. Responsiveness slowly decreases as exposure accumulates. When pollution decreases, recovery occurs — but gradually. The system never fully loses sensitivity.
 
 The tragedy is not destruction. The tragedy is normalization.
 
@@ -74,7 +74,7 @@ Get a free API key at [openweathermap.org](https://openweathermap.org/api).
 
 ## Status
 
-In active development. Live demo coming soon.
+In active development. Live at [datadrift.art](https://datadrift.art)
 
 ---
 
